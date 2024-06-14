@@ -7,7 +7,7 @@
 //!
 //! ### Add bevy-pigeon to your `Cargo.toml`:
 //!
-//! `bevy-pigeon = "0.3.0"`
+//! `bevy-pigeon = "0.5.0"`
 //!
 //! ## Examples
 //!

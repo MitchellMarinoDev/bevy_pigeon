@@ -8,35 +8,30 @@
 //! - [EulerRot]
 
 use bevy::prelude::*;
-use bevy::render::camera::{ScalingMode, WindowOrigin};
+use bevy::render::camera::ScalingMode;
+use bevy_pbr::AlphaMode;
 use serde::{Deserialize, Serialize};
 
 /// The network-able version of [OrthographicProjection].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct NetOrthographicProjection {
-    pub left: f32,
-    pub right: f32,
-    pub bottom: f32,
-    pub top: f32,
     pub near: f32,
     pub far: f32,
-    pub window_origin: WindowOrigin,
+    pub viewport_origin: Vec2,
     pub scaling_mode: ScalingMode,
     pub scale: f32,
+    pub area: Rect,
 }
 
 impl From<OrthographicProjection> for NetOrthographicProjection {
     fn from(o: OrthographicProjection) -> Self {
         NetOrthographicProjection {
-            left: o.left,
-            right: o.right,
-            bottom: o.bottom,
-            top: o.top,
             near: o.near,
             far: o.far,
-            window_origin: o.window_origin,
+            viewport_origin: o.viewport_origin,
             scaling_mode: o.scaling_mode,
             scale: o.scale,
+            area: o.area,
         }
     }
 }
@@ -44,15 +39,12 @@ impl From<OrthographicProjection> for NetOrthographicProjection {
 impl From<NetOrthographicProjection> for OrthographicProjection {
     fn from(o: NetOrthographicProjection) -> Self {
         OrthographicProjection {
-            left: o.left,
-            right: o.right,
-            bottom: o.bottom,
-            top: o.top,
             near: o.near,
             far: o.far,
-            window_origin: o.window_origin,
+            viewport_origin: o.viewport_origin,
             scaling_mode: o.scaling_mode,
             scale: o.scale,
+            area: o.area,
         }
     }
 }
@@ -79,22 +71,28 @@ impl From<NetName> for Name {
 
 /// The network-able version of [Visibility].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct NetVisibility {
-    pub is_visible: bool,
+pub enum NetVisibility {
+    Inherited,
+    Hidden,
+    Visible,
 }
 
 impl From<Visibility> for NetVisibility {
     fn from(o: Visibility) -> Self {
-        NetVisibility {
-            is_visible: o.is_visible,
+        match o {
+            Visibility::Inherited => NetVisibility::Inherited,
+            Visibility::Hidden => NetVisibility::Hidden,
+            Visibility::Visible => NetVisibility::Visible,
         }
     }
 }
 
 impl From<NetVisibility> for Visibility {
     fn from(o: NetVisibility) -> Self {
-        Visibility {
-            is_visible: o.is_visible,
+        match o {
+            NetVisibility::Inherited => Visibility::Inherited,
+            NetVisibility::Hidden => Visibility::Hidden,
+            NetVisibility::Visible => Visibility::Visible,
         }
     }
 }
@@ -107,6 +105,9 @@ pub enum NetAlphaMode {
     /// will be fully opaque and < will be fully transparent
     Mask(f32),
     Blend,
+    Premultiplied,
+    Add,
+    Multiply,
 }
 
 impl From<AlphaMode> for NetAlphaMode {
@@ -115,6 +116,9 @@ impl From<AlphaMode> for NetAlphaMode {
             AlphaMode::Opaque => NetAlphaMode::Opaque,
             AlphaMode::Mask(v) => NetAlphaMode::Mask(v),
             AlphaMode::Blend => NetAlphaMode::Blend,
+            AlphaMode::Premultiplied => NetAlphaMode::Premultiplied,
+            AlphaMode::Add => NetAlphaMode::Add,
+            AlphaMode::Multiply => NetAlphaMode::Multiply,
         }
     }
 }
@@ -125,6 +129,9 @@ impl From<NetAlphaMode> for AlphaMode {
             NetAlphaMode::Opaque => AlphaMode::Opaque,
             NetAlphaMode::Mask(v) => AlphaMode::Mask(v),
             NetAlphaMode::Blend => AlphaMode::Blend,
+            NetAlphaMode::Premultiplied => AlphaMode::Premultiplied,
+            NetAlphaMode::Add => AlphaMode::Add,
+            NetAlphaMode::Multiply => AlphaMode::Multiply,
         }
     }
 }
