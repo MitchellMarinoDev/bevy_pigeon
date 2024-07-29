@@ -3,8 +3,13 @@
 //!  - [DirectionalLight]
 //!  - [PointLight]
 
-use crate::types::misc::NetOrthographicProjection;
 use bevy::prelude::*;
+
+use bevy_pbr::{
+    AmbientLight,
+    DirectionalLight,
+    PointLight,
+};
 use serde::{Deserialize, Serialize};
 
 /// The network-able version of [AmbientLight].
@@ -34,13 +39,12 @@ impl From<NetAmbientLight> for AmbientLight {
 }
 
 /// The network-able version of [DirectionalLight].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct NetDirectionalLight {
     pub color: Color,
     /// Illuminance in lux
     pub illuminance: f32,
     pub shadows_enabled: bool,
-    pub shadow_projection: NetOrthographicProjection,
     pub shadow_depth_bias: f32,
     /// A bias applied along the direction of the fragment's surface normal. It is scaled to the
     /// shadow map's texel size so that it is automatically adjusted to the orthographic projection.
@@ -53,7 +57,6 @@ impl From<DirectionalLight> for NetDirectionalLight {
             color: o.color,
             illuminance: o.illuminance,
             shadows_enabled: o.shadows_enabled,
-            shadow_projection: o.shadow_projection.into(),
             shadow_depth_bias: o.shadow_depth_bias,
             shadow_normal_bias: o.shadow_normal_bias,
         }
@@ -66,7 +69,6 @@ impl From<NetDirectionalLight> for DirectionalLight {
             color: o.color,
             illuminance: o.illuminance,
             shadows_enabled: o.shadows_enabled,
-            shadow_projection: o.shadow_projection.into(),
             shadow_depth_bias: o.shadow_depth_bias,
             shadow_normal_bias: o.shadow_normal_bias,
         }

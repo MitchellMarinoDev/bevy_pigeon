@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::any::Any;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 
 /// An event that forces a sync of component `T`.
 ///
@@ -16,13 +17,42 @@ use std::marker::PhantomData;
 /// most useful if you are using the change detection; you may want to force a sync of components
 /// when a new client joins.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Default)]
+#[derive(Event)]
 pub struct SyncC<T> {
     _pd: PhantomData<T>,
 }
 
 /// A label that is applied to all networking systems.
-#[derive(SystemLabel, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Hash)]
+#[derive(SystemSet, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Hash)]
 pub struct NetLabel;
+
+/// Implement [Resource] for [Client] by wrapping it in a new type.
+#[derive(Resource)]
+pub struct ClientResource {
+    client: Client
+}
+impl Deref for ClientResource {
+    type Target = Client;
+
+    fn deref(&self) -> &Self::Target {
+        &self.client
+    }
+}
+impl DerefMut for ClientResource {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.client
+    }
+}
+impl std::fmt::Debug for ClientResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientResource")
+            .field("status", self.client.status())
+            .field("open", &self.client.open())
+            .field("local_addr", &self.client.local_addr())
+            .field("peer_addr", &self.client.peer_addr())
+            .finish()
+    }
+}
 
 /// The client plugin.
 ///
@@ -30,6 +60,32 @@ pub struct NetLabel;
 /// frame.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default, Hash)]
 pub struct ClientPlugin;
+
+
+/// Implement [Resource] for [Server] by wrapping it in a new type.
+#[derive(Resource)]
+pub struct ServerResource {
+    server: Server
+}
+impl Deref for ServerResource {
+    type Target = Server;
+
+    fn deref(&self) -> &Self::Target {
+        &self.server
+    }
+}
+impl DerefMut for ServerResource {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.server
+    }
+}
+impl std::fmt::Debug for ServerResource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServerResource")
+            .field("connection_count", &self.server.connection_count())
+            .finish()
+    }
+}
 
 /// The server plugin.
 ///
@@ -40,18 +96,18 @@ pub struct ServerPlugin;
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_to_stage(CoreStage::First, client_tick.label(NetLabel));
+        app.add_systems(First, client_tick.in_set(NetLabel));
     }
 }
 
 impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_to_stage(CoreStage::First, server_tick.label(NetLabel));
+        app.add_systems(First, server_tick.in_set(NetLabel));
     }
 }
 
 /// Clears client's message buffer and receive new messages.
-pub fn client_tick(client: Option<ResMut<Client>>) {
+pub fn client_tick(client: Option<ResMut<ClientResource>>) {
     if let Some(mut client) = client {
         client.clear_msgs();
         client.recv_msgs();
@@ -59,10 +115,10 @@ pub fn client_tick(client: Option<ResMut<Client>>) {
 }
 
 /// Clears server's message buffer and receive new messages.
-pub fn server_tick(server: Option<ResMut<Server>>) {
+pub fn server_tick(server: Option<ResMut<ServerResource>>) {
     if let Some(mut server) = server {
-        server.clear_msgs();
-        server.recv_msgs();
+        server.server.clear_msgs();
+        server.server.recv_msgs();
     }
 }
 
@@ -149,9 +205,9 @@ impl AppExt for App {
         table.register::<NetCompMsg<M>>(transport).unwrap();
 
         self.add_event::<SyncC<T>>();
-        self.add_system_to_stage(CoreStage::Last, send_on_event::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::Last, comp_send::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::First, comp_recv::<T, M>.label(NetLabel));
+        self.add_systems(Last, send_on_event::<T, M>.in_set(NetLabel));
+        self.add_systems(Last, comp_send::<T, M>.in_set(NetLabel));
+        self.add_systems(First, comp_recv::<T, M>.in_set(NetLabel));
         self
     }
 
@@ -170,9 +226,9 @@ impl AppExt for App {
         table.register::<NetCompMsg<M>>(transport)?;
 
         self.add_event::<SyncC<T>>();
-        self.add_system_to_stage(CoreStage::Last, send_on_event::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::Last, comp_send::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::First, comp_recv::<T, M>.label(NetLabel));
+        self.add_systems(Last, send_on_event::<T, M>.in_set(NetLabel));
+        self.add_systems(Last, comp_send::<T, M>.in_set(NetLabel));
+        self.add_systems(First, comp_recv::<T, M>.in_set(NetLabel));
         Ok(self)
     }
 
@@ -200,9 +256,9 @@ impl AppExt for App {
         table.register::<NetCompMsg<M>>(transport, &id).unwrap();
 
         self.add_event::<SyncC<T>>();
-        self.add_system_to_stage(CoreStage::Last, send_on_event::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::Last, comp_send::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::First, comp_recv::<T, M>.label(NetLabel));
+        self.add_systems(Last, send_on_event::<T, M>.in_set(NetLabel));
+        self.add_systems(Last, comp_send::<T, M>.in_set(NetLabel));
+        self.add_systems(First, comp_recv::<T, M>.in_set(NetLabel));
         self
     }
 
@@ -222,9 +278,9 @@ impl AppExt for App {
         table.register::<NetCompMsg<M>>(transport, &id)?;
 
         self.add_event::<SyncC<T>>();
-        self.add_system_to_stage(CoreStage::Last, send_on_event::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::Last, comp_send::<T, M>.label(NetLabel));
-        self.add_system_to_stage(CoreStage::First, comp_recv::<T, M>.label(NetLabel));
+        self.add_systems(Last, send_on_event::<T, M>.in_set(NetLabel));
+        self.add_systems(Last, comp_send::<T, M>.in_set(NetLabel));
+        self.add_systems(First, comp_recv::<T, M>.in_set(NetLabel));
         Ok(self)
     }
 }
@@ -232,14 +288,15 @@ impl AppExt for App {
 /// A system that forces a sync of a certain component.
 fn send_on_event<T, M>(
     mut er: EventReader<SyncC<T>>,
-    server: Option<ResMut<Server>>,
-    client: Option<ResMut<Client>>,
+    server: Option<ResMut<ServerResource>>,
+    client: Option<ResMut<ClientResource>>,
     q: Query<(&NetEntity, &NetComp<T, M>, &T)>,
 ) where
     T: Clone + Into<M> + Component,
     M: Clone + Into<T> + Any + Send + Sync,
 {
-    if er.iter().count() == 0 {
+    // writing it this way empties the event reader queue
+    if er.read().count() == 0 { 
         return;
     }
     trace!("Force Syncing {}", std::any::type_name::<T>());
@@ -273,20 +330,15 @@ fn send_on_event<T, M>(
 /// Only add it manually if you know what you are doing and want custom control over when it runs.
 #[allow(clippy::type_complexity)]
 pub fn comp_send<T, M>(
-    server: Option<ResMut<Server>>,
-    client: Option<ResMut<Client>>,
-    q: Query<(&NetEntity, &NetComp<T, M>, &T, ChangeTrackers<T>)>,
+    server: Option<ResMut<ServerResource>>,
+    client: Option<ResMut<ClientResource>>,
+    q: Query<(&NetEntity, &NetComp<T, M>, &T), Changed<T>>,
 ) where
     T: Clone + Into<M> + Component,
     M: Clone + Into<T> + Any + Send + Sync,
 {
     if let Some(server) = server {
-        for (net_e, net_c, comp, ct) in q.iter() {
-            // If we are using change detection, and the component hasn't been changed, skip.
-            if net_c.cd && !ct.is_changed() {
-                continue;
-            }
-
+        for (net_e, net_c, comp) in q.iter() {
             if let Some(to_spec) = net_c.s_dir.to() {
                 if let Err(e) = server.send_spec(
                     *to_spec,
@@ -297,12 +349,7 @@ pub fn comp_send<T, M>(
             }
         }
     } else if let Some(client) = client {
-        for (net_e, net_c, comp, ct) in q.iter() {
-            // If we are using change detection, and the component hasn't been changed, skip.
-            if net_c.cd && !ct.is_changed() {
-                continue;
-            }
-
+        for (net_e, net_c, comp) in q.iter() {
             if let CNetDir::To = net_c.c_dir {
                 if let Err(e) = client.send(&NetCompMsg::<M>::new(net_e.id, comp.clone().into())) {
                     error!("{}", e);
@@ -317,8 +364,8 @@ pub fn comp_send<T, M>(
 /// Most of the time, you will call [`sync_comp`](AppExt::sync_comp) which will add this system.
 /// Only add it manually if you know what you are doing and want custom control over when it runs.
 pub fn comp_recv<T, M>(
-    server: Option<ResMut<Server>>,
-    client: Option<ResMut<Client>>,
+    server: Option<ResMut<ServerResource>>,
+    client: Option<ResMut<ClientResource>>,
     mut q: Query<(&NetEntity, &mut NetComp<T, M>, &mut T)>,
 ) where
     T: Clone + Into<M> + Component,
